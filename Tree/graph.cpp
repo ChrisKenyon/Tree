@@ -7,6 +7,36 @@ using namespace boost;
 
 void findMinSpanningTree(Graph::vertex_descriptor start, Graph &g, Graph &tree)
 {
+	// Dijkstra's uses a min heap to get all the connected vertices not added to the forest
+	Dijkstra(g, start);
+	Graph::vertex_descriptor u, v;
+	map<size_t, size_t> treeVertexVal;
+	pair<Graph::vertex_iterator, Graph::vertex_iterator> vertIter = vertices(g);
+	for (; vertIter.first != vertIter.second; ++vertIter.first)
+	{
+		v = *vertIter.first;
+		if (g[v].weight != LargeValue)
+		{
+			// save corresponding tree index from graph index
+			treeVertexVal[v] = boost::add_vertex(g[v], tree);
+			g[v].visited = true;
+		}
+	}
+
+	vertIter = vertices(g);
+	for (; vertIter.first != vertIter.second; ++vertIter.first)
+	{
+		v = *vertIter.first;
+		if (g[v].weight != LargeValue)
+		{
+			u = g[v].pred;
+			if (u != -1) {
+				EdgeProperties ep = g[edge(u, v, g).first];
+				boost::add_edge(treeVertexVal[u], treeVertexVal[v], ep, tree);
+			}
+		}
+	}
+	/* previous implementation
 	Dijkstra(g, start);
 	map<size_t, size_t> treeVertexVal;
 	pair<Graph::vertex_iterator, Graph::vertex_iterator> vertIter = vertices(g);
@@ -60,10 +90,11 @@ void findMinSpanningTree(Graph::vertex_descriptor start, Graph &g, Graph &tree)
 		}
 		else if (visited.size() != 1)
 			throw new std::exception("Less edges found than expected");
-	}
+	}*/
 }
 
 void findMinSpanningForest(Graph &g, Graph &sf)
+// inefficient but clear and works
 {
 	clearVisited(g);
 	clearMarked(g);
@@ -71,6 +102,8 @@ void findMinSpanningForest(Graph &g, Graph &sf)
 	Graph::vertex_descriptor start = *vertices(g).first;
 
 	int treeNum = 1;
+	int totalForestWeight = 0;
+	int numberConnected = 0;
 	bool isUnvisitedNode = true;
 	while (isUnvisitedNode)
 	{
@@ -78,26 +111,30 @@ void findMinSpanningForest(Graph &g, Graph &sf)
 		Graph tree;
 		findMinSpanningTree(start, g, tree);
 
+		// add tree to forest, mark tree #, and count connections & weight
 		Graph::vertex_descriptor startSFvertex = *vertices(sf).second;
 		pair<Graph::vertex_iterator, Graph::vertex_iterator> vertIter = vertices(tree);
 		for (; vertIter.first != vertIter.second; ++vertIter.first)
 		{
 			tree[*vertIter.first].forestTreeNumber = treeNum;
+			totalForestWeight += tree[*vertIter.first].weight;
+			numberConnected++;
 			add_vertex(tree[*vertIter.first], sf);
 		}
 
+		// add edges in forest
 		pair<Graph::edge_iterator, Graph::edge_iterator> edgeIter = edges(tree);
 		for (; edgeIter.first != edgeIter.second; ++edgeIter.first)
 		{
 			Graph::edge_descriptor edge = *edgeIter.first;
-			EdgeProperties newEdgeProp;
-			newEdgeProp.weight = tree[edge].weight;
+			EdgeProperties newEdgeProp = tree[edge];
 
 			Graph::vertex_descriptor v1 = source(edge, tree) + startSFvertex;
 			Graph::vertex_descriptor v2 = target(edge, tree) + startSFvertex;
 			add_edge(v1, v2, newEdgeProp, sf);
 		}
 
+		// find if there is an unconnected tree in the graph not yet added to the forest
 		isUnvisitedNode = false;
 		vertIter = vertices(g);
 		for (; vertIter.first != vertIter.second; ++vertIter.first)
@@ -111,20 +148,28 @@ void findMinSpanningForest(Graph &g, Graph &sf)
 			}
 		}
 	}
+
+	if (isCyclic(sf))
+		cout << "Forest is cyclic";
+	else cout << "Forest is not cyclic";
+	cout << " and has " << numberConnected << " nodes connected by " << num_edges(sf) << " edges"  << endl
+		 << "with a total weight of " << totalForestWeight << " in " << treeNum << " trees" << endl << endl;
 }
 
+// if dijkstra has any nodes that still have a large weight, it is not connected
 bool isConnected(Graph &g)
 {
 	return Dijkstra(g, vertex(0, g));
 }
 
+// do dfs search and if any are already visited then there is a cycle
 bool isCyclic(Graph &g)
 {
 	stack <Graph::vertex_descriptor> pathStack;
 	Graph::adjacency_iterator neighborIt, neighborEnd;
-
+	clearVisited(g);
 	Graph::vertex_descriptor currentVertex = vertex(0, g);
-	g[currentVertex].pred = NULL;
+	g[currentVertex].pred = -1;
 	pathStack.push(currentVertex);
 
 	while (!pathStack.empty())
@@ -133,7 +178,10 @@ bool isCyclic(Graph &g)
 		pathStack.pop();
 
 		if (g[currentVertex].visited)
+		{
+			clearVisited(g);
 			return true;
+		}
 
 		g[currentVertex].visited = true;
 
@@ -148,7 +196,7 @@ bool isCyclic(Graph &g)
 			}
 		}
 	}
-
+	clearVisited(g);
 	return false;
 }
 
@@ -173,7 +221,7 @@ bool Dijkstra(Graph &g, Graph::vertex_descriptor start)//, size_t offset)
 	for (; vertIter.first != vertIter.second; ++vertIter.first)
 	{
 		g[*vertIter.first].weight = LargeValue;
-		g[*vertIter.first].pred = NULL;
+		g[*vertIter.first].pred = -1;
 		heap.minHeapInsert(*vertIter.first, g);
 	}
 
@@ -296,7 +344,6 @@ void initializeGraph(Graph &g,
 	EdgeProperties e;
 
 	int n, i, j;
-	int startId, endId;
 	fin >> n;
 	Graph::vertex_descriptor v;
 
@@ -304,6 +351,11 @@ void initializeGraph(Graph &g,
 	for (int i = 0; i < n; i++)
 	{
 		v = add_vertex(g);
+		g[v].forestTreeNumber = 0;
+		g[v].marked = false;
+		g[v].pred = 0;
+		g[v].visited = false;
+		g[v].weight = 0;
 	}
 
 	while (fin.peek() != '.')

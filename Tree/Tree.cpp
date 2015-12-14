@@ -13,8 +13,10 @@ int main()
 	try
 	{
 		ifstream fin;
-
-		string fileName = "graph4.txt";
+		cout << "Enter graph file name: ";
+		string fileName;
+		cin >> fileName;
+		cout << endl;
 
 		fin.open(fileName.c_str());
 		if (!fin)
@@ -30,9 +32,15 @@ int main()
 		Graph::vertex_descriptor second = vertex(*vertItrRange.second, g);
 
 		initializeGraph(g, first, second, fin);
-		clearMarked(g);
-		clearVisited(g);
 		fin.close();
+
+		if (isCyclic(g))
+			cout << "Graph is cyclic ";
+		else cout << "Graph is not cyclic ";
+		if (isConnected(g))
+			cout << "and is connected" << endl;
+		else cout << "and is not connected" << endl << endl;
+		cout << g << endl << endl;
 
 		Graph spanningForest;
 		findMinSpanningForest(g, spanningForest);
